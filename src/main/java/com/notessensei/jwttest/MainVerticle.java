@@ -117,6 +117,9 @@ public class MainVerticle {
   PubSecKeyOptions getPubSecOptions(final Map.Entry<String, String> entry) {
     final String type = entry.getKey();
     final String keyString = entry.getValue();
+    if ("cert".equals(type)) {
+      return null;
+    }
     System.out.println("Adding PubSec " + type);
     return new PubSecKeyOptions().setAlgorithm("RS256").setBuffer(keyString);
   }
@@ -188,23 +191,26 @@ public class MainVerticle {
             .setIssuer("Puppet Master")
             .setLeeway(5)
             .setIgnoreExpiration(false)
-            .setExpiresInMinutes(60));
+            .setExpiresInMinutes(60)
+            .setAlgorithm(CERT_END)
+            .setAlgorithm("RS256"));
 
     keys.entrySet().stream()
         .map(this::getPubSecOptions)
         .filter(Objects::nonNull)
         .forEach(options::addPubSecKey);
 
-    final JWTAuth auth = JWTAuth.create(localVertx, new JWTAuthOptions(options));
+    final JWTAuthOptions actual = new JWTAuthOptions(options);
+    final JWTAuth auth = JWTAuth.create(localVertx, actual);
 
     System.out.println("Created " + auth.toString());
 
     final JsonObject claim = new JsonObject().put("sub", "Peter Pan");
 
-    final String token = auth.generateToken(claim);
+    final String token = auth.generateToken(claim, options.getJWTOptions());
     System.out.println("Token:\n" + token);
 
-    final JsonObject loginClaim = new JsonObject().put("token", claim);
+    final JsonObject loginClaim = new JsonObject().put("jwt", token);
     auth.authenticate(loginClaim)
         .onSuccess(user -> System.out.println(user.attributes().encodePrettily()))
         .onFailure(err -> System.err.println(err.getMessage()));
